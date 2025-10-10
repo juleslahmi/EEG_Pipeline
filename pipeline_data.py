@@ -19,8 +19,10 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 PATIENTS = [
     # Each item: (patient_id, path_to_set_or_raw, optional_events_csv, label)
     # If you have epoched EEGLAB .set: set events_csv=None
-    ("subj01", "path/to/subj01.set", None, 1),
-    ("subj02", "path/to/subj02.set", None, 0),
+    ("c06", "/mnt/c/Users/Mohamed Chetouani/Jules Lahmi/data_061025/c06_ICA_clear_bl_sac_ASR_interpol_reref_elist_be.set", None, 0),
+    ("c07", "/mnt/c/Users/Mohamed Chetouani/Jules Lahmi/data_061025/c07_ICA_clear_bl_sac_ASR_interpol_reref_elist_be.set", None, 0),
+    ("d05", "/mnt/c/Users/Mohamed Chetouani/Jules Lahmi/data_061025/d05_ICA_clear_bl_sac_ASR_interpol_reref_elist_be.set", None, 1),
+    ("d06", "/mnt/c/Users/Mohamed Chetouani/Jules Lahmi/data_061025/d06_ICA_clear_bl_sac_ASR_interpol_reref_elist_be.set", None, 1)
     # If you have RAW + events.csv instead:
     # ("subj03", "path/to/subj03_raw.set", "path/to/subj03_events.csv", 1),
 ]
@@ -30,25 +32,16 @@ TMIN, TMAX = -0.2, 0.8   # seconds
 BASELINE = (None, 0)
 
 # Preproc params
-L_FREQ, H_FREQ = 4., 38.
+L_FREQ, H_FREQ = 4., 38. 
 RS_FREQ = 250.0
 
 # -----------------------------
 # 2) LOADER -> returns epochs (n_epochs, n_chans, n_times), sfreq, ch_names
 # -----------------------------
-def load_patient_epochs(file_path, events_csv=None, montage=None, avgref=False):
+def load_patient_epochs(file_path):
     file_path = str(file_path)
 
-    epochs = mne.read_epochs_eeglab(file_path, preload=True)
-    if montage:
-        epochs.set_montage(montage, on_missing="ignore")
-    if avgref:
-        epochs.set_eeg_reference("average")
-
-    events = np.loadtxt(events_csv, delimiter=",", skiprows=1, dtype=int)
-    # Ensure MNE events shape (n,3): [sample, 0, event_id]
-    events = events[:, [0, 1, 2]]
-
+    epochs = mne.read_epochs_eeglab(file_path)
 
     # -------- Standard preprocessing on epochs --------
     # (1) Band-pass
@@ -79,7 +72,7 @@ class PatientEpochsDataset(Dataset):
         self.n_times = None
 
         for pid, fpath, evcsv, label in PATIENTS:
-            X, _, sfreq, chs = load_patient_epochs(fpath, evcsv)
+            X, _, sfreq, chs = load_patient_epochs(fpath)
             if self.n_chans is None:
                 self.n_chans = X.shape[1]
                 self.n_times = X.shape[2]
@@ -112,7 +105,7 @@ full_ds = PatientEpochsDataset()
 n_chans, n_times = full_ds.n_chans, full_ds.n_times
 groups = np.array(full_ds.groups)
 
-gkf = GroupKFold(n_splits=5)
+gkf = GroupKFold(n_splits=2)
 train_idx, valid_idx = next(gkf.split(np.zeros(len(full_ds)), full_ds.y, groups=groups))
 
 train_set = Subset(full_ds, train_idx)
@@ -123,8 +116,8 @@ valid_set = Subset(full_ds, valid_idx)
 # -----------------------------
 n_classes = 2  # dyslexic vs control
 model = ShallowFBCSPNet(
-    n_chans=n_chans,
-    n_classes=n_classes,
+    n_chans,
+    n_classes,
     n_times=n_times,
     final_conv_length="auto"
 ).cuda()
