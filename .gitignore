@@ -1,0 +1,53 @@
+# --------------------------
+# Python general
+# --------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --------------------------
+# Virtual environments
+# --------------------------
+venv/
+.env/
+.venv/
+
+# --------------------------
+# Build / packaging
+# --------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --------------------------
+# Jupyter / IDE metadata
+# --------------------------
+.ipynb_checkpoints/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --------------------------
+# EEG data & experiment outputs
+# --------------------------
+data/
+*.fif
+*.bdf
+*.set
+*.edf
+*.csv
+*.npz
+*.npy
+runs/
+cache/
+outputs/
+logs/
+checkpoints/
+
+# --------------------------
+# OS files
+# --------------------------
+.DS_Store
+Thumbs.db
