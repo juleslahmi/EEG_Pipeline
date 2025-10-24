@@ -8,9 +8,9 @@ __pycache__/
 # --------------------------
 # Virtual environments
 # --------------------------
-venv/
-.env/
-.venv/
+pipeline/
+.pipeline/
+.pipeline/
 
 # --------------------------
 # Build / packaging

@@ -5,6 +5,7 @@ from braindecode.preprocessing import create_windows_from_events
 from braindecode.preprocessing import exponential_moving_standardize
 
 from braindecode.models import ShallowFBCSPNet
+from braindecode.util import set_random_seeds
 import torch
 
 from braindecode import EEGClassifier
@@ -17,7 +18,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 import numpy as np
 from numpy import multiply
 
-dataset = MOABBDataset(dataset_name="BNCI2014_001", subject_ids=[3])
+dataset = MOABBDataset(dataset_name="BNCI2014_001")
 
 factor = 1e6
 
@@ -27,8 +28,12 @@ preprocessors = [
     Preprocessor('filter', l_freq=4., h_freq=38.),
     Preprocessor(exponential_moving_standardize, factor_new=1e-3, init_block_size=1000)
 ]
-preprocess(dataset, preprocessors, n_jobs=1)
+preprocess(dataset, preprocessors, n_jobs=8)
 
+torch.backends.cudnn.benchmark = True
+cuda = torch.cuda.is_available()
+seed = 20200220
+set_random_seeds(seed=seed, cuda=cuda)
 
 n_classes = 4
 classes = list(range(n_classes))
@@ -80,7 +85,6 @@ lr = 0.0625 * 0.01
 weight_decay = 0
 
 batch_size = 64
-n_epochs = 2
 
 clf = EEGClassifier(
     model,
@@ -92,14 +96,14 @@ clf = EEGClassifier(
     optimizer__lr=lr,
     batch_size=batch_size,
     optimizer__weight_decay=weight_decay,
-    max_epochs=10,
+    max_epochs=20,
     callbacks=[
         LRScheduler(policy=CosineAnnealingLR, T_max=10)
     ],
     device='cuda',
     classes=classes 
 )
-_ = clf.fit(train_set, y=None, epochs=10)
+_ = clf.fit(train_set, y=None, epochs=20)
 
 try:
     y_valid = valid_set.get_metadata()['target'].to_numpy()
