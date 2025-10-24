@@ -37,7 +37,7 @@ def discover_subjects(data_root: str | Path, ext=".set") -> list[tuple[str, str,
     patients = []
     data_root = Path(data_root)
     class_dirs = {"Control" : 0, "Dyslexic" : 1}
-    for class_name in class_dirs.items() :
+    for class_name in class_dirs.keys() :
         label = class_dirs[class_name]
         class_path = data_root/class_name
         if not class_path.exists():
@@ -54,7 +54,7 @@ def discover_subjects(data_root: str | Path, ext=".set") -> list[tuple[str, str,
     return patients
 
 class PatientEpochsDataset(Dataset):
-    def __init__(self):
+    def __init__(self, patients):
         self.X = []
         self.y = []
         self.groups = []  
@@ -99,4 +99,46 @@ def load_dataset(data_path, extension):
         "n_chans": dataset.n_chans,
         "n_times": dataset.n_times,
         "n_subjects": len(set(dataset.groups))
+    }
+
+def save_dataset_cache(bundle: dict, path: str | Path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    ds = bundle["dataset"]
+    np.savez_compressed(
+        path,
+        X=ds.X, y=ds.y,
+        groups=np.array(ds.groups, dtype=object),
+        patients=np.array(ds.patients, dtype=object),
+        n_chans=ds.n_chans, n_times=ds.n_times
+    )
+
+def load_dataset_from_cache(path: str | Path):
+    d = np.load(path, allow_pickle=True)
+    # lightweight Dataset wrapper that reads from arrays
+    import torch
+    from torch.utils.data import Dataset
+
+    class ArrayDataset(Dataset):
+        def __init__(self, X, y, groups, patients, n_chans, n_times):
+            self.X = X.astype(np.float32)
+            self.y = y.astype(np.int64)
+            self.groups = list(groups)
+            self.patients = list(patients)
+            self.n_chans = int(n_chans)
+            self.n_times = int(n_times)
+
+        def __len__(self): return self.X.shape[0]
+        def __getitem__(self, i): 
+            return torch.from_numpy(self.X[i]), int(self.y[i])
+
+    ds = ArrayDataset(
+        d["X"], d["y"], d["groups"], d["patients"], d["n_chans"], d["n_times"]
+    )
+    return {
+        "patients": list(d["patients"]),
+        "dataset": ds,
+        "n_chans": int(d["n_chans"]),
+        "n_times": int(d["n_times"]),
+        "n_subjects": len(set(ds.groups)),
     }
