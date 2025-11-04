@@ -41,10 +41,17 @@ def main():
     ap.add_argument("--cv-fold", type=str, default="all", help="'all' or integer fold index")
     ap.add_argument("--outdir", type=str, default="runs")
     ap.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"])
+    ap.add_argument("--dataset-cache", type=str, default=None,
+                help="Path to .npz cache produced by data_load.save_dataset_cache")
     args = ap.parse_args()
 
     # 1) Load dataset
-    bundle = data_load.load_dataset(args.data_root, extension=".set")
+    if args.dataset_cache:
+        print(f"Loading dataset cache: {args.dataset_cache}")
+        bundle = data_load.load_dataset_from_cache(args.dataset_cache)
+    else:
+        print(f"Loading dataset from {args.data_root} ...")
+        bundle = data_load.load_dataset(args.data_root, extension=".set")
     ds = bundle["dataset"]
     n_chans, n_times = bundle["n_chans"], bundle["n_times"]
 

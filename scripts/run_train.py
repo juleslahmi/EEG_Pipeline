@@ -1,11 +1,4 @@
 # scripts/run_train.py
-"""
-CLI entrypoint to train one model with a chosen CV scheme.
-
-Usage examples:
-  python scripts/run_train.py --data-root /mnt/c/.../Data --model shallow --cv-scheme loso --cv-fold all
-  python scripts/run_train.py --data-root /mnt/c/.../Data --model eegnet --cv-scheme groupkfold --cv-n-splits 10 --cv-fold 3
-"""
 
 import argparse
 import json
@@ -120,11 +113,9 @@ def main():
             device=args.device,
             seed=args.seed,
             run_name=f"{args.model}_{args.cv_scheme}_fold{k}",
+            fold_id=k
         )
         all_results.append(result)
-
-        print(f" -> Done fold {k}. Checkpoint: {result['checkpoint_path']}")
-
     # -------------------------------------------------
     # 7) Summarize
     # -------------------------------------------------
@@ -137,7 +128,6 @@ def main():
             {
                 "fold": i,
                 "run_dir": res["run_dir"],
-                "checkpoint": res["checkpoint_path"],
                 "metrics_path": res["metrics_path"],
             }
             for i, res in zip(fold_ids, all_results)

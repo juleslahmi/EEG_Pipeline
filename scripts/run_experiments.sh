@@ -13,46 +13,49 @@ export PYTHONPATH="${ROOT_DIR}:${PYTHONPATH:-}"
 cd "${ROOT_DIR}"
 
 DATA_ROOT="/mnt/c/Users/Mohamed Chetouani/Jules Lahmi/Data"
-OUTDIR="runs"
+
 DEVICE="cuda"
-EPOCHS=50
+EPOCHS=10
 BATCH_SIZE=64
 LR=0.001
 WEIGHT_DECAY=0.0
 CV_SCHEME="loso"      # or "groupkfold"
-CV_N_SPLITS=10        # only used if groupkfold
+CV_N_SPLITS=5        # only used if groupkfold
 SEED=42
+MODEL=("shallow")
+FOLD=("all")
+TAG="m=${MODEL}_lr=${LR}_wd=${WEIGHT_DECAY}_bs=${BATCH_SIZE}_ep=${EPOCHS}_${CV_SCHEME}_k=${CV_N_SPLITS}"
+OUTDIR="runs/${TAG}"
 
-# --- Define models you want to test ---
-MODELS=("shallow")
+CACHE_PATH="runs/cache/all_subjects.npz"
+if [[ ! -f "$CACHE_PATH" ]]; then
+  python -m scripts.build_cache --data-root "$DATA_ROOT" --out "$CACHE_PATH"
+fi
 
-# --- Define folds to run ---
-# Use "all" to run every fold, or list specific folds: (0 1 2)
-FOLDS=("all")
+python3 scripts/run_train.py \
+  --dataset-cache "$CACHE_PATH"\
+  --data-root "$DATA_ROOT" \
+  --model "$MODEL" \
+  --lr "$LR" \
+  --weight-decay "$WEIGHT_DECAY" \
+  --batch-size "$BATCH_SIZE" \
+  --epochs "$EPOCHS" \
+  --cv-scheme "$CV_SCHEME" \
+  --cv-n-splits "$CV_N_SPLITS" \
+  --cv-fold "$FOLD" \
+  --device "$DEVICE" \
+  --outdir "$OUTDIR" \
+  --seed "$SEED"
 
-# --- Loop through models and folds ---
-for MODEL in "${MODELS[@]}"; do
-  for FOLD in "${FOLDS[@]}"; do
-    echo "======================================================"
-    echo "Running model: $MODEL | CV: $CV_SCHEME | Fold: $FOLD"
-    echo "======================================================"
+python3 scripts/run_eval.py \
+  --dataset-cache "$CACHE_PATH"\
+  --data-root "$DATA_ROOT" \
+  --model "$MODEL" \
+  --cv-scheme "$CV_SCHEME" \
+  --cv-n-splits "$CV_N_SPLITS" \
+  --cv-fold "$FOLD" \
+  --device "$DEVICE" \
+  --outdir "$OUTDIR"
 
-    python3 scripts/run_train.py \
-      --data-root "$DATA_ROOT" \
-      --model "$MODEL" \
-      --lr "$LR" \
-      --weight-decay "$WEIGHT_DECAY" \
-      --batch-size "$BATCH_SIZE" \
-      --epochs "$EPOCHS" \
-      --cv-scheme "$CV_SCHEME" \
-      --cv-n-splits "$CV_N_SPLITS" \
-      --cv-fold "$FOLD" \
-      --device "$DEVICE" \
-      --outdir "$OUTDIR" \
-      --seed "$SEED"
-
-    echo ""
-  done
-done
 
 echo "All experiments completed."

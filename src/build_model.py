@@ -48,17 +48,14 @@ def build_model(model_cfg):
     elif name == 'tcn':
         model = TCN(
             n_chans,
-            n_outputs=n_classes,
-            n_times=n_times,
-            final_conv_length="auto"
+            n_outputs=n_classes
         ).cuda()
 
     elif name == 'hybridnet':
         model = HybridNet(
             n_chans,
             n_outputs=n_classes,
-            n_times=n_times,
-            final_conv_length="auto"
+            n_times=n_times
         ).cuda()
 
     else: 

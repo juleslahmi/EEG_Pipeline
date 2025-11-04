@@ -19,13 +19,13 @@ SEED=42
 MODELS=(shallow deep4 eegnet tcn hybridnet)
 LRS=(0.001 0.0005)
 WDS=(0.0 0.0001)
-BATCHES=(16 32 64)
-EPOCHS_LIST=(10 20 50)
+BATCHES=(16 64)
+EPOCHS_LIST=(10 50)
 
 CACHE_PATH="runs/cache/all_subjects.npz"
 CV_SCHEMES=(loso groupkfold)
 # try several GroupKFold sizes; ignored for LOSO
-GKF_SPLITS_LIST=(5 8 10)
+GKF_SPLITS_LIST=(5 10)
 
 for MODEL in "${MODELS[@]}"; do
   for LR in "${LRS[@]}"; do
@@ -58,6 +58,7 @@ for MODEL in "${MODELS[@]}"; do
 
                 echo "================ EVAL  ${TAG} ================"
                 python -m scripts.run_eval \
+                  --dataset-cache "$CACHE_PATH" \
                   --data-root "$DATA_ROOT" \
                   --model "$MODEL" \
                   "${CV_ARGS[@]}" \
@@ -87,6 +88,7 @@ for MODEL in "${MODELS[@]}"; do
 
               echo "================ EVAL  ${TAG} ================"
               python -m scripts.run_eval \
+                --dataset-cache "$CACHE_PATH" \
                 --data-root "$DATA_ROOT" \
                 --model "$MODEL" \
                 "${CV_ARGS[@]}" \

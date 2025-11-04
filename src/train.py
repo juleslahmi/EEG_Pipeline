@@ -15,6 +15,7 @@ from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler, EarlyStopping, Checkpoint, EpochScoring
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
 
+from sklearn.metrics import accuracy_score
 
 def _set_seed(seed: int):
     random.seed(seed)
@@ -44,6 +45,7 @@ def fit_one_fold(
     device: str = "cuda",
     seed: int = 42,
     run_name: str | None = None,
+    fold_id: int | None = None
 ):
     """
     Parameters
@@ -149,8 +151,14 @@ def fit_one_fold(
             )
         )
 
-    # Keep and auto-reload best weights (by valid_loss)
-    ckpt_cb = Checkpoint(monitor="valid_loss_best", fn_prefix="best_", load_best=True)
+    run_dir = _make_run_dir(outdir, model, run_name)
+
+    ckpt_cb = Checkpoint(
+        monitor="valid_loss_best",
+        fn_prefix="best_",
+        dirname=run_dir,          # ensure files go into this fold's dir
+        load_best=True,           # model will be rolled back to best epoch
+        )
     callbacks.append(ckpt_cb)
 
     # Build classifier
@@ -169,15 +177,59 @@ def fit_one_fold(
         classes=classes,
     )
 
-    # Run dir
-    run_dir = _make_run_dir(outdir, model, run_name)
-
+    start_time = time.time()
     # Fit
     _ = clf.fit(train_set)
 
     # Save history
+    end_time = time.time()
     metrics_path = run_dir / "metrics.csv"
 
+    hist_list = clf.history.to_list()              # each item is a dict for one epoch
+    hist_df = pd.DataFrame(hist_list)              # make a small DataFrame
+
+    # find best epoch by valid_loss
+    i_best = int(hist_df['valid_loss'].astype(float).idxmin())
+
+    best_valid_loss = float(hist_df.loc[i_best, 'valid_loss'])
+    best_valid_acc_hist = (
+        float(hist_df.loc[i_best, 'valid_acc']) if 'valid_acc' in hist_df.columns else None
+    )
+
+    # Recompute accuracy with the model currently loaded at best epoch
+    y_valid = np.array([valid_set[i][1] for i in range(len(valid_set))], dtype=int)
+    y_pred  = clf.predict(valid_set).astype(int)
+    epoch_acc = float(accuracy_score(y_valid, y_pred))
+
+
+    if isinstance(valid_set, Subset):
+        pids = np.array([dataset.patients[i] for i in valid_set.indices])
+        labels = np.array([dataset.y[i] for i in valid_set.indices], dtype=int)
+    else:
+        pids = np.array(dataset.patients)
+        labels = np.array(dataset.y, dtype=int)
+
+    patient_preds = {}
+    patient_labels = {}
+    for pid in np.unique(pids):
+        idx = np.where(pids == pid)[0]
+        votes = y_pred[idx]
+        patient_preds[pid] = int(np.bincount(votes).argmax())
+        patient_labels[pid] = int(np.bincount(labels[idx]).argmax()) 
+
+    pp = np.array(list(patient_preds.values()), dtype=int)
+    yy = np.array(list(patient_labels.values()), dtype=int)
+    patient_acc = float(accuracy_score(yy, pp))
+
+    row = {
+        "fold": -1 if fold_id is None else int(fold_id),
+        "valid_acc": epoch_acc,           # at best epoch (recomputed)
+        "patient_acc": patient_acc,       # at best epoch
+        "valid_loss": best_valid_loss,    # best, not last
+        "train_time_s": round(end_time - start_time, 1),
+    }
+    pd.DataFrame([row]).to_csv(metrics_path, index=False)
+    print(f"[INFO] Saved metrics to {metrics_path}")
     # Save a small config snapshot for reproducibility
     (run_dir / "cfg.json").write_text(
         json.dumps(
@@ -203,14 +255,10 @@ def fit_one_fold(
         )
     )
 
-    # Best checkpoint path (created by Checkpoint callback)
-    checkpoint_path = None
-    for p in run_dir.glob("best_*.pt"):
-        checkpoint_path = str(p)  # last one wins; there should typically be one
 
     return {
         "clf": clf,
         "run_dir": str(run_dir),
-        "checkpoint_path": checkpoint_path,
         "metrics_path": str(metrics_path),
     }
+
