@@ -10,7 +10,7 @@ from braindecode import EEGClassifier
 from skorch.helper import predefined_split
 
 from src.build_model import build_model
-
+from src.tcn_supress_warning import replace_dropout2d
 
 def _patient_level_accuracy(full_ds, subset, preds: np.ndarray) -> float:
     """Majority-vote per patient over the subset, return patient-level accuracy."""
@@ -53,6 +53,8 @@ def evaluate_fold(
 
     # Rebuild model & wrapper
     net = build_model(model_cfg)
+    replace_dropout2d(net)
+    
     use_cuda = device == "cuda" and torch.cuda.is_available()
     if use_cuda:
         net = net.cuda()

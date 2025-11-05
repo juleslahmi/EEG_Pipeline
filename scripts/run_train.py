@@ -6,9 +6,8 @@ from pathlib import Path
 from datetime import datetime
 
 # Import project modules
-from src import data_load, split, train
+from src import data_load, split, train, tcn_supress_warning
 from src.build_model import build_model
-
 
 def main():
     # -------------------------------------------------
@@ -101,6 +100,9 @@ def main():
 
         # Build model
         model = build_model(model_cfg)
+
+        if args.model=='tcn':
+            tcn_supress_warning.replace_dropout2d(model)
 
         # Train
         result = train.fit_one_fold(

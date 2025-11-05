@@ -120,7 +120,7 @@ def main():
             "mean_patient_acc": float(df["patient_acc"].mean()),
             "std_patient_acc": float(df["patient_acc"].std(ddof=0)),
         }
-        summ_path = outdir / f"summary_{args.model}_{args.cv_scheme}.json"
+        summ_path = outdir / f"summary.json"
         summ_path.write_text(json.dumps(summary, indent=2))
         print(f"Summary: {summary}")
         print(f"Summary JSON: {summ_path}")
