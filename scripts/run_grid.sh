@@ -2,7 +2,11 @@
 set -euo pipefail
 
 # --- venv ---
-VENV_PATH="/home/lahmi/projects/EEG_ML/pipeline"
+[ -f .env ] && source .env
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+VENV_PATH="${VENV_PATH:-${REPO_ROOT}/pipeline}"
+
 source "${VENV_PATH}/bin/activate"
 
 PY="${VENV_PATH}/bin/python"
@@ -12,7 +16,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 export PYTHONPATH="${ROOT_DIR}"
 cd "${ROOT_DIR}"
 # --- data & global settings ---
-DATA_ROOT="/home/lahmi/projects/EEG_ML/Data"
 DEVICE="cuda"
 SEED=42
 

@@ -1,11 +1,11 @@
 #!/bin/bash
-# ======================================================
-#  Run a series of EEG model training experiments
-#  across models, CV schemes, and hyperparameters.
-# ======================================================
+set -euo pipefail
 
+[ -f .env ] && source .env
 
-VENV_PATH="/home/lahmi/projects/EEG_ML/pipeline"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+VENV_PATH="${VENV_PATH:-${REPO_ROOT}/pipeline}"
+
 source "${VENV_PATH}/bin/activate"
 
 PY="${VENV_PATH}/bin/python"
@@ -16,8 +16,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 export PYTHONPATH="${ROOT_DIR}"
 
 cd "${ROOT_DIR}"
-
-DATA_ROOT="/home/lahmi/projects/EEG_ML/Data"
 
 DEVICE="cuda"
 EPOCHS=10
