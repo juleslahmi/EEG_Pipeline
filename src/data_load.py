@@ -30,8 +30,11 @@ def load_patient_epochs(file_path):
         X[i] = exponential_moving_standardize(
             X[i], factor_new=1e-3, init_block_size=1000
         )
+
+    events = epochs.events[:, -1]
+
     y_dummy = np.zeros(X.shape[0], dtype=np.int64)
-    return X.astype(np.float32), y_dummy, epochs.info["sfreq"], epochs.ch_names
+    return X.astype(np.float32), events, epochs.info["sfreq"], epochs.ch_names
 
 def discover_subjects(data_root: str | Path, ext=".set") -> list[tuple[str, str, int]]: 
     patients = []
@@ -54,30 +57,42 @@ def discover_subjects(data_root: str | Path, ext=".set") -> list[tuple[str, str,
     return patients
 
 class PatientEpochsDataset(Dataset):
-    def __init__(self, patients):
+    def __init__(self, patients, target='diagnosis', event_map=None):
         self.X = []
         self.y = []
         self.groups = []  
         self.patients = []
         self.n_chans = None
         self.n_times = None
+        self.target = target
+        self.events_map = event_map
 
 
         for pid, fpath, label in patients:
-            X, _, sfreq, chs = load_patient_epochs(fpath)
+            X, events, sfreq, chs = load_patient_epochs(fpath)
             if self.n_chans is None:
                 self.n_chans = X.shape[1]
                 self.n_times = X.shape[2]
             else:
                 assert X.shape[1] == self.n_chans and X.shape[2] == self.n_times, \
                     f"Shape mismatch: got {X.shape}, expected (n, {self.n_chans}, {self.n_times})"
-
+                
+            if self.target == "diagnosis":
+                y = np.full(X.shape[0], int(label), dtype=np.int64)
+            elif self.target == "event":
+                if self.event_map:
+                    y = np.array([self.event_map.get(str(e), e) for e in events], dtype=np.int64)
+                else:
+                    y = events
+            else:
+                raise ValueError("Target must be either 'diagnosis' or 'event'.")
             y = np.full(X.shape[0], int(label), dtype=np.int64)
 
             self.X.append(X)
             self.y.append(y)
             self.groups.extend([pid] * X.shape[0])
             self.patients.extend([pid] * X.shape[0])
+            self.events.extend(events)
 
         self.X = np.concatenate(self.X, axis=0)
         self.y = np.concatenate(self.y, axis=0)

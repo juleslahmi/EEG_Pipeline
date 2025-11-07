@@ -32,6 +32,13 @@ def main():
     parser.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"])
     parser.add_argument("--dataset-cache", type=str, default=None,
                     help="Path to .npz cache produced by data_load.save_dataset_cache")
+    
+    parser.add_argument("--target", type=str, default="diagnosis",
+                choices=["diagnosis", "event"],
+                help="What to predict: patient group (diagnosis) or event code.")
+    parser.add_argument("--event-map", type=str, default=None,
+                    help="Optional JSON mapping from raw event codes to class ids. "
+                        "Example: '{\"201\":0,\"202\":1,\"203\":2,\"204\":3,\"205\":4}'")
 
     args = parser.parse_args()
 
@@ -46,6 +53,12 @@ def main():
     else:
         print(f"Loading dataset from {args.data_root} ...")
         bundle = data_load.load_dataset(args.data_root, extension=".set")
+
+    #target = args.target  # Either 'diagnosis' or 'event'
+    event_map = json.loads(args.event_map) if args.event_map else None
+
+    #dataset = PatientEpochsDataset(patients, target=target, event_map=event_map)
+
     ds = bundle["dataset"]
     n_chans, n_times = bundle["n_chans"], bundle["n_times"]
     print(f"  -> Loaded {bundle['n_subjects']} subjects, shape ({n_chans} chans, {n_times} samples)")

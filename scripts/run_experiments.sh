@@ -19,21 +19,27 @@ cd "${ROOT_DIR}"
 
 DEVICE="cuda"
 EPOCHS=10
-BATCH_SIZE=64
-LR=0.001
+BATCH_SIZE=16
+LR=0.005
 WEIGHT_DECAY=0.0
-CV_SCHEME="groupkfold"      # or "groupkfold"
+CV_SCHEME="loso"      # or "groupkfold"
 CV_N_SPLITS=5        # only used if groupkfold
-SEED=42
-MODEL=("shallow")
+SEED=717
+MODEL=("tcn")
 FOLD=("all")
 TAG="m=${MODEL}_lr=${LR}_wd=${WEIGHT_DECAY}_bs=${BATCH_SIZE}_ep=${EPOCHS}_${CV_SCHEME}"
 OUTDIR="runs/${TAG}"
 
 
-CACHE_PATH="runs/cache/all_subjects.npz"
+TARGET="diagnosis"
+CACHE_PATH="runs/cache/all_subjects_target=${TARGET}.npz"
+
 if [[ ! -f "$CACHE_PATH" ]]; then
-  time "$PY" -m scripts.build_cache --data-root "$DATA_ROOT" --out "$CACHE_PATH"
+  echo "[Building cache for target=$TARGET]"
+  time "$PY" -m scripts.build_cache \
+    --data-root "$DATA_ROOT" \
+    --out "$CACHE_PATH" \
+    --target "$TARGET"
 fi
 
 time "$PY" scripts/run_train.py \
@@ -51,7 +57,7 @@ time "$PY" scripts/run_train.py \
   --outdir "$OUTDIR" \
   --seed "$SEED"
 
-tiùe "$PY" scripts/run_eval.py \
+time "$PY" scripts/run_eval.py \
   --dataset-cache "$CACHE_PATH"\
   --data-root "$DATA_ROOT" \
   --model "$MODEL" \

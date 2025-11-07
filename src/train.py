@@ -14,6 +14,7 @@ from braindecode import EEGClassifier
 from skorch.helper import predefined_split
 from skorch.callbacks import LRScheduler, EarlyStopping, Checkpoint, EpochScoring
 from torch.optim.lr_scheduler import ReduceLROnPlateau, CosineAnnealingLR
+from src.target import TargetView, infer_classes_from
 
 from sklearn.metrics import accuracy_score
 
@@ -45,7 +46,9 @@ def fit_one_fold(
     device: str = "cuda",
     seed: int = 42,
     run_name: str | None = None,
-    fold_id: int | None = None
+    fold_id: int | None = None,
+    target: str = "diagnosis",
+    event_map: dict | None = None
 ):
     """
     Parameters
@@ -109,8 +112,12 @@ def fit_one_fold(
     early_threshold = float(train_cfg.get("early_threshold", 1e-4))
 
     # Subsets
-    train_set = Subset(dataset, train_idx)
-    valid_set = Subset(dataset, valid_idx)
+    wrapped = TargetView(dataset, target=target, event_map=event_map)
+
+    train_set = Subset(wrapped, train_idx)
+    valid_set = Subset(wrapped, valid_idx)
+
+    classes = infer_classes_from(wrapped)
 
     # Device
     use_cuda = device == "cuda" and torch.cuda.is_available()
