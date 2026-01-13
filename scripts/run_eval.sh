@@ -18,21 +18,21 @@ export PYTHONPATH="${ROOT_DIR}"
 cd "${ROOT_DIR}"
 
 DEVICE="cuda"
-EPOCHS=10
+EPOCHS=50
 BATCH_SIZE=16
-LR=0.005
-WEIGHT_DECAY=0.000
+LR=0.001
+WEIGHT_DECAY=0.0001
 CV_SCHEME="loso"      # or "groupkfold"
 CV_N_SPLITS=5        # only used if groupkfold
 SEED=42
-MODEL=("tcn")  # shallow, deep4, eegnet, tcn, biot
+MODEL=("biot")  # shallow, deep4, eegnet, tcn, biot
 FOLD=("all")
 TAG="m=${MODEL}_lr=${LR}_wd=${WEIGHT_DECAY}_bs=${BATCH_SIZE}_ep=${EPOCHS}_${CV_SCHEME}"
 OUTDIR="runs/${TAG}"
 
 
 TARGET="diagnosis"  # or "diagnosis"
-CACHE_PATH="runs/cache/all_subjects_target=${TARGET}_freq=8.npz"
+CACHE_PATH="runs/cache/all_subjects_target=${TARGET}_freq=128.npz"
 EVENT_MAP='{"2011":0,"2021":1,"2031":2,"2041":3,"2051":4}'
 
 if [[ ! -f "$CACHE_PATH" ]]; then
@@ -44,23 +44,6 @@ if [[ ! -f "$CACHE_PATH" ]]; then
     --event-map "$EVENT_MAP"
 fi
 
-time "$PY" scripts/run_train.py \
-  --data-root "$DATA_ROOT" \
-  --model "$MODEL" \
-  --lr "$LR" \
-  --weight-decay "$WEIGHT_DECAY" \
-  --batch-size "$BATCH_SIZE" \
-  --epochs "$EPOCHS" \
-  --cv-scheme "$CV_SCHEME" \
-  --cv-n-splits "$CV_N_SPLITS" \
-  --cv-fold "$FOLD" \
-  --device "$DEVICE" \
-  --outdir "$OUTDIR" \
-  --seed "$SEED"\
-  --target "$TARGET"\
-  --dataset-cache "$CACHE_PATH"\
-  --event-map "$EVENT_MAP"\
-
 time "$PY" scripts/run_eval.py \
   --data-root "$DATA_ROOT" \
   --model "$MODEL" \
@@ -70,6 +53,3 @@ time "$PY" scripts/run_eval.py \
   --device "$DEVICE" \
   --outdir "$OUTDIR"\
   --dataset-cache "$CACHE_PATH"\
-
-
-echo "All experiments completed."

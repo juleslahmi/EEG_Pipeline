@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 import numpy as np
 from datetime import datetime
+from sklearn.metrics import f1_score
 
 # Ensure project root on path if needed
 import sys
@@ -35,7 +36,7 @@ def main():
     ap = argparse.ArgumentParser(description="Evaluate EEG runs and build a leaderboard.")
     ap.add_argument("--data-root", type=str, required=True)
     ap.add_argument("--model", type=str, required=True,
-                    choices=["shallow", "deep4", "eegnet", "tcn", "hybridnet"])
+                    choices=["shallow", "deep4", "eegnet", "tcn", "hybridnet", "biot"])
     ap.add_argument("--cv-scheme", type=str, default="loso", choices=["loso", "groupkfold"])
     ap.add_argument("--cv-n-splits", type=int, default=10)
     ap.add_argument("--cv-fold", type=str, default="all", help="'all' or integer fold index")
@@ -43,6 +44,9 @@ def main():
     ap.add_argument("--device", type=str, default="cuda", choices=["cuda", "cpu"])
     ap.add_argument("--dataset-cache", type=str, default=None,
                 help="Path to .npz cache produced by data_load.save_dataset_cache")
+    ap.add_argument("--exclude-events", type=int, nargs="*", default=None, help="Event codes to exclude to match training data")
+    ap.add_argument("--tmin", type=float, default=0.1)
+    ap.add_argument("--tmax", type=float, default=0.2)
     args = ap.parse_args()
 
     # 1) Load dataset
@@ -51,15 +55,30 @@ def main():
         bundle = data_load.load_dataset_from_cache(args.dataset_cache)
     else:
         print(f"Loading dataset from {args.data_root} ...")
-        bundle = data_load.load_dataset(args.data_root, extension=".set")
+        bundle = data_load.load_dataset(args.data_root, extension=".set", tmin=args.tmin, tmax=args.tmax)
     ds = bundle["dataset"]
     n_chans, n_times = bundle["n_chans"], bundle["n_times"]
+
+    if args.exclude_events:
+        print(f"Excluding events: {args.exclude_events}")
+        mask = ~np.isin(ds.events, args.exclude_events)
+        print(f"  -> Excluding {np.sum(~mask)} samples, keeping {np.sum(mask)}")
+        ds.X = ds.X[mask]
+        ds.y = ds.y[mask]
+        ds.events = ds.events[mask]
+        ds.groups = [g for i, g in enumerate(ds.groups) if mask[i]]
+        ds.patients = [p for i, p in enumerate(ds.patients) if mask[i]]
+        print(f"  -> New dataset size: {len(ds.X)}")
 
     # 2) Rebuild splits in the same way training did
     splits = split.make_splits(ds, scheme=args.cv_scheme, n_splits=args.cv_n_splits, seed=42)
 
     # 3) Model cfg for reconstruction
-    model_cfg = {"name": args.model, "n_chans": n_chans, "n_times": n_times, "n_classes": 2}
+    # Infer number of classes from the dataset (do not hardcode 2)
+    labels = np.asarray(ds.y, dtype=np.int64)
+    uniq = np.unique(labels)
+    n_classes = int(len(uniq))
+    model_cfg = {"name": args.model, "n_chans": n_chans, "n_times": n_times, "n_classes": n_classes}
 
     # 4) Determine folds to evaluate
     if args.cv_fold.lower() == "all":
@@ -71,6 +90,12 @@ def main():
     outdir = Path(args.outdir)
     leaderboard = []
     missing = []
+    
+    # Global accumulators for calculating dataset-wide F1 (concatenated)
+    all_y_true_epoch = []
+    all_y_pred_epoch = []
+    all_y_true_patient = []
+    all_y_pred_patient = []
 
     # Expected run name pattern from training: "{model}_{cv_scheme}_fold{k}"
     for k in fold_ids:
@@ -94,6 +119,15 @@ def main():
             checkpoint_path=ckpt,
             device=args.device,
         )
+        
+        # Pop arrays to avoid adding them to the CSV / leaderboard dict
+        # and accumulate them for global F1 calculation
+        if "y_true_epoch" in res:
+            all_y_true_epoch.append(res.pop("y_true_epoch"))
+            all_y_pred_epoch.append(res.pop("y_pred_epoch"))
+            all_y_true_patient.append(res.pop("y_true_patient"))
+            all_y_pred_patient.append(res.pop("y_pred_patient"))
+
         leaderboard.append({
             "fold": k,
             "run_dir": str(run_dir),
@@ -101,7 +135,8 @@ def main():
             **res
         })
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Fold {k} -> "
-              f"epoch_acc={res['epoch_acc']:.4f}, patient_acc={res['patient_acc']:.4f}")
+              f"epoch_acc={res['epoch_acc']:.4f}, epoch_f1={res['epoch_f1']:.4f}, "
+              f"patient_acc={res['patient_acc']:.4f}, patient_f1={res['patient_f1']:.4f}")
 
     # 6) Save leaderboard CSV + summary JSON
     if leaderboard:
@@ -111,14 +146,34 @@ def main():
         df.to_csv(lb_path, index=False)
         print(f"\n Leaderboard written to: {lb_path}")
 
+        # Compute global F1 (concatenated)
+        global_epoch_f1 = 0.0
+        global_patient_f1 = 0.0
+        if all_y_true_epoch:
+            glob_y_true_e = np.concatenate(all_y_true_epoch)
+            glob_y_pred_e = np.concatenate(all_y_pred_epoch)
+            global_epoch_f1 = f1_score(glob_y_true_e, glob_y_pred_e, average='macro', zero_division=0)
+            
+            glob_y_true_p = np.concatenate(all_y_true_patient)
+            glob_y_pred_p = np.concatenate(all_y_pred_patient)
+            global_patient_f1 = f1_score(glob_y_true_p, glob_y_pred_p, average='macro', zero_division=0)
+
         summary = {
             "model": args.model,
             "cv_scheme": args.cv_scheme,
             "n_evaluated_folds": len(df),
+            # Per-fold means (legacy/standard CV metric)
             "mean_epoch_acc": float(df["epoch_acc"].mean()),
             "std_epoch_acc": float(df["epoch_acc"].std(ddof=0)),
+            "mean_epoch_f1": float(df["epoch_f1"].mean()),
+            "std_epoch_f1": float(df["epoch_f1"].std(ddof=0)),
             "mean_patient_acc": float(df["patient_acc"].mean()),
             "std_patient_acc": float(df["patient_acc"].std(ddof=0)),
+            "mean_patient_f1": float(df["patient_f1"].mean()),
+            "std_patient_f1": float(df["patient_f1"].std(ddof=0)),
+            # Global (concatenated) metrics - more representative for F1 in LOOCV
+            "global_epoch_f1": float(global_epoch_f1),
+            "global_patient_f1": float(global_patient_f1),
         }
         summ_path = outdir / f"summary.json"
         summ_path.write_text(json.dumps(summary, indent=2))

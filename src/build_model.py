@@ -1,4 +1,4 @@
-from braindecode.models import ShallowFBCSPNet, Deep4Net, EEGNet, BDTCN, HybridNet
+from braindecode.models import ShallowFBCSPNet, Deep4Net, EEGNet, BDTCN, HybridNet, BIOT
 
 def build_model(model_cfg):
     """
@@ -49,7 +49,9 @@ def build_model(model_cfg):
         model = BDTCN(
             n_chans,
             n_outputs=n_classes,
-            drop_prob=0
+            drop_prob=0,
+            n_blocks=1,        # default is 4
+            kernel_size=2,     # default is 40
         ).cuda()
 
     elif name == 'hybridnet':
@@ -57,6 +59,13 @@ def build_model(model_cfg):
             n_chans,
             n_outputs=n_classes,
             n_times=n_times,
+        ).cuda()
+
+    elif name == 'biot':
+        model = BIOT(
+                n_chans=n_chans,
+                n_outputs=n_classes,
+                n_times=n_times, 
         ).cuda()
 
     else: 

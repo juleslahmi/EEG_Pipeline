@@ -167,9 +167,7 @@ def fit_one_fold(
         load_best=True,           # model will be rolled back to best epoch
         )
     callbacks.append(ckpt_cb)
-
-    # Build classifier
-    classes = np.array(sorted(set(dataset.y.tolist() if isinstance(dataset.y, np.ndarray) else dataset.y)))
+    print(f"[INFO] Target={target}, classes={classes}, n_classes={len(classes)}")
     clf = EEGClassifier(
         module=model,
         criterion=torch.nn.CrossEntropyLoss,

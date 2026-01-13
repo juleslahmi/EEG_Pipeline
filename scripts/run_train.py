@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 from datetime import datetime
+import numpy as np
 
 # Import project modules
 from src import data_load, split, train, tcn_supress_warning
@@ -16,7 +17,8 @@ def main():
     parser = argparse.ArgumentParser(description="Train EEG classifier with chosen model and CV scheme")
 
     parser.add_argument("--data-root", type=str, required=True, help="Path to data root (containing Control/ and Dyslexic/)")
-    parser.add_argument("--model", type=str, default="shallow", choices=["shallow", "deep4", "eegnet", "tcn", "hybridnet"])
+
+    parser.add_argument("--model", type=str, default="shallow", choices=["shallow", "deep4", "eegnet", "tcn", "hybridnet", "biot"])
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -39,6 +41,11 @@ def main():
     parser.add_argument("--event-map", type=str, default=None,
                     help="Optional JSON mapping from raw event codes to class ids. "
                         "Example: '{\"201\":0,\"202\":1,\"203\":2,\"204\":3,\"205\":4}'")
+    parser.add_argument("--exclude-events", type=int, nargs="*", default=None, help="Event codes to exclude from training")
+    parser.add_argument("--freq", type=int, default=40)
+    parser.add_argument("--tmin", type=float, default=-0.1)
+    parser.add_argument("--tmax", type=float, default=1)
+    parser.add_argument("--drop-channels", type=str, nargs='*', default=None)
 
     args = parser.parse_args()
 
@@ -52,7 +59,7 @@ def main():
         bundle = data_load.load_dataset_from_cache(args.dataset_cache)
     else:
         print(f"Loading dataset from {args.data_root} ...")
-        bundle = data_load.load_dataset(args.data_root, extension=".set")
+        bundle = data_load.load_dataset(args.data_root, extension=".set", freq=args.freq, tmin=args.tmin, tmax=args.tmax)
 
     #target = args.target  # Either 'diagnosis' or 'event'
     event_map = json.loads(args.event_map) if args.event_map else None
@@ -63,7 +70,22 @@ def main():
     n_chans, n_times = bundle["n_chans"], bundle["n_times"]
     print(f"  -> Loaded {bundle['n_subjects']} subjects, shape ({n_chans} chans, {n_times} samples)")
 
-  
+    if args.exclude_events:
+        print(f"Excluding events: {args.exclude_events}")
+        # Need to filter ds.X, ds.y, ds.groups, ds.patients, ds.events
+        # ds.events is np array
+        mask = ~np.isin(ds.events, args.exclude_events)
+        print(f"  -> Excluding {np.sum(~mask)} samples, keeping {np.sum(mask)}")
+        
+        ds.X = ds.X[mask]
+        ds.y = ds.y[mask]
+        ds.events = ds.events[mask]
+        
+        # groups and patients are lists, we need to filter them
+        ds.groups = [g for i, g in enumerate(ds.groups) if mask[i]]
+        ds.patients = [p for i, p in enumerate(ds.patients) if mask[i]]
+        
+        print(f"  -> New dataset size: {len(ds.X)}")
 
     # -------------------------------------------------
     # 3) Make splits
@@ -75,11 +97,25 @@ def main():
     # -------------------------------------------------
     # 4) Prepare configs
     # -------------------------------------------------
+    n_classes = 5 if args.target == "event" else 2
+
+    labels = np.asarray(ds.y, dtype=np.int64)
+    uniq = np.unique(labels)
+
+    if uniq.min() < 0 or uniq.max() >= n_classes:
+        print(f"[WARN] Remapping labels; got uniques {uniq.tolist()} with n_classes={n_classes}")
+        remap = {int(v): i for i, v in enumerate(sorted(uniq))}
+        ds.y = np.array([remap[int(v)] for v in labels], dtype=np.int64)
+        uniq = np.unique(ds.y)
+        n_classes = int(len(uniq))
+
+    print(f"-> Target={args.target}, n_classes={n_classes}, classes={uniq.tolist()}")
+        
     model_cfg = {
         "name": args.model,
         "n_chans": n_chans,
         "n_times": n_times,
-        "n_classes": 2,
+        "n_classes": n_classes,
     }
     train_cfg = {
         "lr": args.lr,
@@ -109,7 +145,10 @@ def main():
     # -------------------------------------------------
     for k in fold_ids:
         fold = splits[k]
+        valid_idx = fold["valid_idx"]
+        valid_subjects = np.unique([ds.patients[i] for i in valid_idx])
         print(f"\n[{datetime.now().strftime('%H:%M:%S')}] === Training fold {k}/{len(splits)-1} ({args.model}) ===")
+        print(f"    LOSO held-out subject(s): {valid_subjects.tolist()}")
 
         # Build model
         model = build_model(model_cfg)
@@ -128,7 +167,9 @@ def main():
             device=args.device,
             seed=args.seed,
             run_name=f"{args.model}_{args.cv_scheme}_fold{k}",
-            fold_id=k
+            fold_id=k,
+            target=args.target,
+            event_map=event_map 
         )
         all_results.append(result)
     # -------------------------------------------------
