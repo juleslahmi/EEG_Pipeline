@@ -1,9 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-# Run region ablation experiments: train models with different brain regions dropped
-# Tests each region (frontal, temporal, central, etc.) across multiple seeds
-
 [ -f .env ] && source .env
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
@@ -18,7 +15,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 export PYTHONPATH="${ROOT_DIR}"
 cd "${ROOT_DIR}"
 
-# ----- Config (customize) -----
 DEVICE="cuda"
 MODEL="tcn"               # model to test
 LR=0.005

@@ -1,13 +1,4 @@
 # scripts/run_eval.py
-"""
-Evaluate trained runs by reloading checkpoints and computing:
-- epoch-level accuracy
-- patient-level accuracy
-
-Usage:
-  python -m scripts.run_eval --data-root /path/to/Data --model shallow --cv-scheme loso --outdir runs
-  python -m scripts.run_eval --data-root /path/to/Data --model eegnet --cv-scheme groupkfold --cv-n-splits 10 --fold all
-"""
 
 import argparse
 import json
@@ -49,7 +40,6 @@ def main():
     ap.add_argument("--tmax", type=float, default=0.2)
     args = ap.parse_args()
 
-    # 1) Load dataset
     if args.dataset_cache:
         print(f"Loading dataset cache: {args.dataset_cache}")
         bundle = data_load.load_dataset_from_cache(args.dataset_cache)
@@ -70,23 +60,18 @@ def main():
         ds.patients = [p for i, p in enumerate(ds.patients) if mask[i]]
         print(f"  -> New dataset size: {len(ds.X)}")
 
-    # 2) Rebuild splits in the same way training did
     splits = split.make_splits(ds, scheme=args.cv_scheme, n_splits=args.cv_n_splits, seed=42)
 
-    # 3) Model cfg for reconstruction
-    # Infer number of classes from the dataset (do not hardcode 2)
     labels = np.asarray(ds.y, dtype=np.int64)
     uniq = np.unique(labels)
     n_classes = int(len(uniq))
     model_cfg = {"name": args.model, "n_chans": n_chans, "n_times": n_times, "n_classes": n_classes}
 
-    # 4) Determine folds to evaluate
     if args.cv_fold.lower() == "all":
         fold_ids = range(len(splits))
     else:
         fold_ids = [int(args.cv_fold)]
 
-    # 5) For each fold, locate the run dir and checkpoint, evaluate
     outdir = Path(args.outdir)
     leaderboard = []
     missing = []
@@ -138,7 +123,6 @@ def main():
               f"epoch_acc={res['epoch_acc']:.4f}, epoch_f1={res['epoch_f1']:.4f}, "
               f"patient_acc={res['patient_acc']:.4f}, patient_f1={res['patient_f1']:.4f}")
 
-    # 6) Save leaderboard CSV + summary JSON
     if leaderboard:
         import pandas as pd
         df = pd.DataFrame(leaderboard).sort_values("fold")

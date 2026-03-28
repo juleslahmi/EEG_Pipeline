@@ -16,16 +16,18 @@ BASELINE = (None, 0)
 L_FREQ, H_FREQ = 4., 38. 
 import re
 
-def load_patient_epochs(file_path, tmin=0.1, tmax=0.2, freq=40, drop_channels=None):
+def load_patient_epochs(file_path, tmin=0.1, tmax=0.2, freq=40, drop_channels=None, drop_eog=True):
     epochs = mne.read_epochs_eeglab(str(file_path), verbose=False)
 
-    # --- drop common EOG channels if present ---
-    eog_keywords = ('EOG', 'VEOG', 'HEOG', 'LOC', 'ROC', 'M1', 'M2')   # add names you use
-    to_drop = [ch for ch in epochs.ch_names if any(k in ch.upper() for k in eog_keywords)]
+    # --- optionally drop common EOG channels if present ---
+    if drop_eog:
+        eog_keywords = ('EOG', 'VEOG', 'HEOG', 'LOC', 'ROC', 'M1', 'M2')   # add names you use
+        to_drop = [ch for ch in epochs.ch_names if any(k in ch.upper() for k in eog_keywords)]
+    else:
+        to_drop = []
     
     if drop_channels:
         to_drop.extend([ch for ch in epochs.ch_names if ch in drop_channels])
-    print(to_drop)
     if to_drop:
         print(f"Keeping channels: {[ch for ch in epochs.ch_names if ch not in to_drop]}")
         epochs.drop_channels(to_drop)
@@ -35,7 +37,6 @@ def load_patient_epochs(file_path, tmin=0.1, tmax=0.2, freq=40, drop_channels=No
     id_to_label = {v: k for k, v in epochs.event_id.items()}
     raw_ids = epochs.events[:, -1]
 
-    # extract 2011, 2021, ... from the label
     stim_codes = []
     for ev_id in raw_ids:
         label = id_to_label.get(int(ev_id), str(ev_id))
@@ -45,7 +46,6 @@ def load_patient_epochs(file_path, tmin=0.1, tmax=0.2, freq=40, drop_channels=No
         stim_codes.append(int(m.group(1)))
     stim_codes = np.array(stim_codes, dtype=np.int64)
 
-    # then your existing filtering/resampling/standardization
     epochs.filter(L_FREQ, H_FREQ, fir_design="firwin", verbose=False)
     epochs.crop(tmin=tmin, tmax=tmax)
     epochs.resample(freq, npad="auto")
@@ -76,7 +76,7 @@ def discover_subjects(data_root: str | Path, ext=".set") -> list[tuple[str, str,
     return patients
 
 class PatientEpochsDataset(Dataset):
-    def __init__(self, patients, target='diagnosis', event_map=None, tmin=0.1, tmax=0.2, freq=40, drop_channels=None):
+    def __init__(self, patients, target='diagnosis', event_map=None, tmin=0.1, tmax=0.2, freq=40, drop_channels=None, drop_eog=True):
         self.X = []
         self.y = []
         self.groups = []  
@@ -92,7 +92,7 @@ class PatientEpochsDataset(Dataset):
 
 
         for pid, fpath, label in patients:
-            X, events, sfreq, chs = load_patient_epochs(fpath, tmin=tmin, tmax=tmax, freq=self.freq, drop_channels=self.drop_channels)
+            X, events, sfreq, chs = load_patient_epochs(fpath, tmin=tmin, tmax=tmax, freq=self.freq, drop_channels=self.drop_channels, drop_eog=drop_eog)
             if self.n_chans is None:
                 self.n_chans = X.shape[1]
                 self.n_times = X.shape[2]
@@ -128,9 +128,9 @@ class PatientEpochsDataset(Dataset):
         return torch.from_numpy(self.X[idx]), int(self.y[idx])
 
 
-def load_dataset(data_path, extension, target: str = "diagnosis", event_map: dict | None = None, tmin=0.1, tmax=0.2, freq: int = 40, drop_channels=None):
+def load_dataset(data_path, extension, target: str = "diagnosis", event_map: dict | None = None, tmin=0.1, tmax=0.2, freq: int = 40, drop_channels=None, drop_eog=True):
     patients = discover_subjects(data_path, extension)
-    dataset = PatientEpochsDataset(patients, target=target, event_map=event_map, tmin=tmin, tmax=tmax, freq=freq, drop_channels=drop_channels)
+    dataset = PatientEpochsDataset(patients, target=target, event_map=event_map, tmin=tmin, tmax=tmax, freq=freq, drop_channels=drop_channels, drop_eog=drop_eog)
     return {
         "patients": patients,
         "dataset": dataset,
@@ -168,7 +168,6 @@ def save_dataset_cache(bundle: dict, path: str | Path):
 
 def load_dataset_from_cache(path: str | Path):
     d = np.load(path, allow_pickle=True)
-    # lightweight Dataset wrapper that reads from arrays
     import torch
     from torch.utils.data import Dataset
 

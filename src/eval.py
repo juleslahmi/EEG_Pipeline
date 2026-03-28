@@ -24,8 +24,6 @@ def _patient_level_predictions(full_ds, subset, preds: np.ndarray) -> tuple[np.n
     labels = np.array([full_ds.y[i] for i in idxs], dtype=int)
 
     per_pid_pred, per_pid_true = {}, {}
-    # Sort or ensure consistent order if needed, but dict iteration order is insertion-based in modern Python
-    # We loop over unique pids found in this subset
     for pid in np.unique(pids):
         sel = np.where(pids == pid)[0]
         # Weighted voting or simple count. Here simple count.
@@ -55,11 +53,6 @@ def evaluate_fold(
     checkpoint_path: str | Path,
     device: str = "cuda",
 ) -> dict:
-    """
-    Load a model with best checkpoint and evaluate on the valid subset.
-    Returns dict with epoch_acc, patient_acc and counts.
-    """
-    # Build valid subset
     valid_set = Subset(dataset, valid_idx)
 
     # Rebuild model & wrapper

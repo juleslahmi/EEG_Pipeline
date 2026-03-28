@@ -4,7 +4,6 @@ from pathlib import Path
 import json
 from src import data_load
 
-# ensure project root on sys.path if needed
 from pathlib import Path as _P
 import sys as _S
 ROOT = _P(__file__).resolve().parents[1]

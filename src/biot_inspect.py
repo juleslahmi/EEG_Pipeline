@@ -56,21 +56,18 @@ def load_checkpoint_to_model(model, checkpoint_path: Path, device: torch.device)
 
 
 def compute_saliency_for_batch(model, x_batch: torch.Tensor, device: torch.device):
-    # x_batch: (B, n_chans, n_times), float32
     x = x_batch.to(device).requires_grad_(True)
     out = model(x)
-    # if model returns tuple (logits, features), take first
     if isinstance(out, tuple) or (isinstance(out, list) and len(out) > 1):
         logits = out[0]
     else:
         logits = out
-    # take predicted class per sample
+
     probs = torch.softmax(logits, dim=1)
     preds = probs.argmax(dim=1)
     saliency = []
     for i in range(x.shape[0]):
         model.zero_grad()
-        # take logit of predicted class
         logit = logits[i, preds[i]]
         logit.backward(retain_graph=True)
         g = x.grad[i].detach().cpu().abs().numpy()  # (n_chans, n_times)
@@ -103,7 +100,6 @@ def main(argv=None):
     ds, patients, n_chans, n_times, n_classes = load_bundle(args.dataset_cache)
     print(f'Loaded dataset: n_chans={n_chans}, n_times={n_times}, n_classes={n_classes}, n_samples={len(ds)}')
 
-    # Build model config and instantiate
     model_cfg = {'name': args.model, 'n_chans': n_chans, 'n_times': n_times, 'n_classes': n_classes}
     model = build_model(model_cfg)
 
@@ -111,7 +107,6 @@ def main(argv=None):
     print('Loading checkpoint into model...')
     load_checkpoint_to_model(model, Path(args.checkpoint), device)
 
-    # If requested, detect EOG channel indices by reading a raw .set file from data_root
     eog_indices = []
     if args.zero_eog:
         if not args.data_root:
@@ -126,7 +121,6 @@ def main(argv=None):
         eog_indices = [i for i, ch in enumerate(ch_names_full) if any(k in ch.upper() for k in eog_keywords)]
         print('Detected EOG channel indices (to be zeroed):', eog_indices)
 
-    # Choose random sample indices
     rng = np.random.RandomState(42)
     all_idx = np.arange(len(ds))
     if args.n_samples >= len(all_idx):
@@ -134,15 +128,12 @@ def main(argv=None):
     else:
         sel = rng.choice(all_idx, size=args.n_samples, replace=False)
 
-    # iterate in batches and compute saliency
     batch_size = int(args.batch_size)
     saliency_list = []
     print(f'Computing saliency on {len(sel)} samples (batch_size={batch_size})...')
     for i in range(0, len(sel), batch_size):
         ids = sel[i:i+batch_size]
-        # build tensor batch
         xb = torch.stack([ds[j][0].float() for j in ids], dim=0)
-        # zero EOG channels in inputs if requested (preserve model input shape)
         if args.zero_eog and eog_indices:
             for idx in eog_indices:
                 if idx < xb.shape[1]:
@@ -154,14 +145,12 @@ def main(argv=None):
     mean_sal = saliency.mean(axis=0)
     std_sal = saliency.std(axis=0)
 
-    # channel and time importance
     channel_imp = mean_sal.mean(axis=1)  # mean over time -> (n_chans,)
     time_imp = mean_sal.mean(axis=0)     # mean over channels -> (n_times,)
 
     # per-patient aggregation if patients list present
     patient_imp = None
     if patients is not None:
-        # patients aligned with dataset order in bundle
         patients_arr = np.array(patients)
         unique_p = np.unique(patients_arr)
         p_imp = {}
@@ -171,8 +160,6 @@ def main(argv=None):
             sel_in_samples = np.intersect1d(sel, sel_idx, assume_unique=True)
             if sel_in_samples.size == 0:
                 continue
-            # map indices into saliency array positions
-            # we sampled randomly (sel) so find indices of sel_in_samples in sel
             pos = np.nonzero(np.isin(sel, sel_in_samples))[0]
             p_imp[p] = saliency[pos].mean(axis=0).tolist()
         patient_imp = p_imp

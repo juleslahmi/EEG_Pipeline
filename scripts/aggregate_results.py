@@ -53,7 +53,7 @@ def collect_summaries(root: Path, filename: str = "summary.json") -> pd.DataFram
     if not rows:
         raise SystemExit(f"No {filename} files found under {root}")
     df = pd.DataFrame(rows)
-    # Nice column order if present
+
     cols = [
         "tag", "exp_dir", "model", "cv_scheme", "n_folds",
         "lr", "weight_decay", "batch_size", "epochs",
@@ -83,7 +83,6 @@ def main():
     root = Path(args.root)
     out_prefix = (args.out_prefix + "_") if args.out_prefix else ""
 
-    # 1) Collect all summaries
     df = collect_summaries(root, filename=args.filename)
 
     # Save the full master summary
@@ -91,7 +90,6 @@ def main():
     df.to_csv(master_path, index=False)
     print(f"[INFO] Wrote {master_path} with {len(df)} rows.")
 
-    # 2) Overall multi-metric ranking
     metrics = parse_metrics(args.metrics)
     if not metrics:
         raise SystemExit("No metrics provided for overall ranking (--metrics).")
@@ -100,7 +98,6 @@ def main():
     # Determine ascending flags aligned with metrics order
     ascending_flags = [m in asc_set for m in metrics if m in df.columns]
 
-    # Only keep metrics that actually exist in df
     usable_metrics = [m for m in metrics if m in df.columns]
     if not usable_metrics:
         raise SystemExit(f"None of the requested metrics exist in data: {metrics}")
@@ -111,7 +108,6 @@ def main():
     overall_topk.to_csv(overall_path, index=False)
     print(f"[INFO] Wrote overall top-{args.top_k} → {overall_path} (by {', '.join(usable_metrics)})")
 
-    # 3) Per-metric leaderboards
     for m in usable_metrics:
         asc = m in asc_set
         if m not in df.columns:
@@ -121,7 +117,6 @@ def main():
         topk_m.to_csv(out_m, index=False)
         print(f"[INFO] Wrote top-{args.top_k} by {m} ({'asc' if asc else 'desc'}) → {out_m}")
 
-    # 4) Optional: print small console summary
     print("\n=== Overall top-k ===")
     print(overall_topk[["tag", "exp_dir"] + usable_metrics].to_string(index=False))
 

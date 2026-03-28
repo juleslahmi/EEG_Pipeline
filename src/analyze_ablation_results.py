@@ -26,12 +26,7 @@ def analyze_results():
         results_map[dropped] = res
 
     all_regions = {'FRONTAL', 'CENTRAL', 'TEMPORAL', 'PARIETAL'}
-    
-    # We want to calculate the marginal contribution of each region R.
-    # Contribution(R) = Average over all contexts S (where R is present) of:
-    #                   Acc(Model with S dropped) - Acc(Model with S + R dropped)
-    # Note: "Model with S dropped" means R is PRESENT.
-    #       "Model with S+R dropped" means R is ABSENT.
+
     
     summary_data = []
     
@@ -49,14 +44,9 @@ def analyze_results():
             for context_tuple in itertools.combinations(other_regions, i):
                 context = frozenset(context_tuple) # These are dropped
                 
-                # Case 1: Region is PRESENT (only context is dropped)
-                # Case 2: Region is ABSENT (context + region is dropped)
                 context_plus_region = context | {region}
                 
                 if context in results_map and context_plus_region in results_map:
-                    # Get accuracies
-                    # Use 'epoch_mean_across_seeds' if available, else 'epoch_mean'
-                    # The previous error showed 'epoch_mean_across_seeds' is the correct key for aggregated files
                     
                     res_present = results_map[context]
                     res_absent = results_map[context_plus_region]
@@ -107,8 +97,6 @@ def analyze_results():
     single_region_data = []
 
     for region in sorted(all_regions):
-        # 1. Solo Performance (Sufficiency)
-        # We want the result where EVERYTHING ELSE is dropped.
         others = all_regions - {region}
         dropped_others = frozenset(others)
         
@@ -118,15 +106,11 @@ def analyze_results():
         else:
             solo_acc = float('nan')
 
-        # 2. Drop Impact (Necessity)
-        # We want the result where ONLY THIS REGION is dropped.
         dropped_self = frozenset({region})
         
         if dropped_self in results_map:
             res = results_map[dropped_self]
             drop_acc = res.get('patient_mean_across_seeds', 0)
-            # Impact is how much accuracy DROPS compared to baseline
-            # Positive impact means the region was necessary
             impact = baseline_acc - drop_acc
         else:
             drop_acc = float('nan')

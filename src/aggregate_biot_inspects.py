@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Aggregate BIOT inspection outputs across folds.
 
-Looks for directories under `--inspect-root` containing `saliency_mean.npy` and
-`channel_importance.npy`, stacks them across folds and computes mean/std.
-
-Writes:
- - `aggregate_saliency_mean.npy`, `aggregate_saliency_std.npy`
- - `aggregate_channel_mean.npy`, `aggregate_channel_std.npy`
- - `aggregate_time_mean.npy`, `aggregate_time_std.npy`
- - JSON summary at `--out`
- - heatmap PNG `aggregate_saliency_mean.png`
-"""
 from pathlib import Path
 import argparse
 import numpy as np

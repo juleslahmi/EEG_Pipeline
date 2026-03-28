@@ -48,7 +48,7 @@ class TargetView(Dataset):
         return len(self.base)
 
     def __getitem__(self, i: int) -> Tuple[Any, int]:
-        X, _ = self.base[i]     # ignore base's y; we provide our own
+        X, _ = self.base[i]
         return X, int(self.labels[i])
 
 def infer_classes_from(ds: TargetView) -> np.ndarray:

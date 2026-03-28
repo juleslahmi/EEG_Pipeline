@@ -2,7 +2,6 @@
 set -euo pipefail
 
 # Run BIOT inspection (gradient saliency) with sensible defaults.
-# Customize by exporting env vars or passing arguments below.
 
 [ -f .env ] && source .env
 
@@ -18,7 +17,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 export PYTHONPATH="${ROOT_DIR}"
 cd "${ROOT_DIR}"
 
-# Defaults (override via env or by editing)
 CHECKPOINT="${CHECKPOINT:-runs/m=biot_lr=0.001_wd=0.0001_bs=16_ep=50_loso/biot_loso_fold0/best_params.pt}"
 CACHE_PATH="${CACHE_PATH:-runs/cache/all_subjects_target=diagnosis_freq=128.npz}"
 OUTDIR="${OUTDIR:-runs/inspect_biot_fold0}"

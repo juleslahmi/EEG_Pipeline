@@ -18,7 +18,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 export PYTHONPATH="${ROOT_DIR}"
 cd "${ROOT_DIR}"
 
-# ----- Config (customize) -----
 DEVICE="cuda"
 MODEL="biot"               # model to test
 LR=0.0005

@@ -1,18 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-# Load environment variables if present
 [ -f .env ] && source .env
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 VENV_PATH="${VENV_PATH:-${REPO_ROOT}/pipeline}"
 
-# Activate virtual environment
 if [ -f "${VENV_PATH}/bin/activate" ]; then
     source "${VENV_PATH}/bin/activate"
 fi
 
-PY="python" # Assuming python is in path after activation, or specify path if needed
+PY="python"
 
 ROOT_DIR="$REPO_ROOT"
 export PYTHONPATH="${ROOT_DIR}"
@@ -35,10 +33,6 @@ CACHE_PATH="runs/cache/all_subjects_target=${TARGET}_freq=${FREQ}.npz"
 # Check if cache exists, otherwise warn or build it
 if [[ ! -f "$CACHE_PATH" ]]; then
     echo "Cache file $CACHE_PATH not found. Attempting to build or load from raw will happen in training."
-    # Ideally should build it once here if missing to avoid rebuilding 5 times
-    # But run_train.py loads from raw if cache arg is NOT passed. 
-    # If cache arg IS passed but file missing, it crashes.
-    # So we should build it if missing.
     echo "Building cache..."
     "$PY" -m scripts.build_cache --data-root "$DATA_ROOT" --out "$CACHE_PATH" --target "$TARGET" --freq "$FREQ"
 fi

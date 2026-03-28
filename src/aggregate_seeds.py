@@ -24,7 +24,6 @@ def read_leaderboard(run_dir: Path, model: str, cv: str):
     lb_path = run_dir / f"leaderboard_{model}_{cv}.csv"
     if lb_path.exists():
         return pd.read_csv(lb_path)
-    # fallback: look for metrics.csv in child dirs and aggregate
     metrics_files = list(run_dir.rglob('metrics.csv'))
     if metrics_files:
         dfs = [pd.read_csv(p) for p in metrics_files]
@@ -50,7 +49,6 @@ def main(argv=None):
     # Check for nested structure first: runs_root/base_tag/seed=X
     nested_dir = runs_root / args.base_tag
     if nested_dir.exists() and nested_dir.is_dir():
-        # Assume subdirectories are the seeds
         run_dirs = sorted([p for p in nested_dir.iterdir() if p.is_dir()])
     else:
         # Fallback to flat structure: runs_root/base_tag_seed=X
@@ -76,11 +74,9 @@ def main(argv=None):
         if 'epoch_acc' in df.columns and 'patient_acc' in df.columns:
             epoch_mean = float(df['epoch_acc'].mean())
             patient_mean = float(df['patient_acc'].mean())
-            # Default to average of per-fold F1 (often biased for LOSO)
             epoch_f1_mean = float(df['epoch_f1'].mean()) if 'epoch_f1' in df.columns else 0.0
             patient_f1_mean = float(df['patient_f1'].mean()) if 'patient_f1' in df.columns else 0.0
         else:
-            # try other common column names
             possible_epoch = [c for c in df.columns if ('epoch' in c.lower() or 'valid' in c.lower()) and 'acc' in c.lower()]
             possible_patient = [c for c in df.columns if 'patient' in c.lower() and 'acc' in c.lower()]
             if possible_epoch and possible_patient:
@@ -90,7 +86,6 @@ def main(argv=None):
                 print(f"Could not find epoch/patient acc columns in {d}, skipping")
                 continue
         
-        # Attempt to read global F1 from summary.json if available (preferred for LOSO)
         summ_path = d / "summary.json"
         if summ_path.exists():
             try:

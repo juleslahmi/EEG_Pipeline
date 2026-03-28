@@ -15,11 +15,10 @@ echo "[$(date +%T)] python: $PY"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
 export PYTHONPATH="${ROOT_DIR}"
 cd "${ROOT_DIR}"
-# --- data & global settings ---
+
 DEVICE="cuda"
 SEED=42
 
-# --- grids ---
 MODELS=(shallow deep4 eegnet tcn)
 LRS=(0.001 0.0005)
 WDS=(0.0 0.0001)
